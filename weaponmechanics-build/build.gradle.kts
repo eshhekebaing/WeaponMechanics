@@ -37,6 +37,7 @@ paperPluginYaml {
         server("MythicMobs", required = false)
         server("Geyser-Spigot", required = false)
         server("Vivecraft-Spigot-Extension", required = false)
+        server("StalkerCore", required = false, load = PaperPluginYaml.Load.BEFORE)
     }
 }
 

@@ -26,6 +26,7 @@ import me.deecaad.core.mechanics.targeters.Targeter;
 import me.deecaad.core.utils.FileUtil;
 import me.deecaad.weaponmechanics.lib.MythicMobsLoader;
 import me.deecaad.weaponmechanics.listeners.ExplosionInteractionListeners;
+import me.deecaad.weaponmechanics.listeners.AmmoModifierListener;
 import me.deecaad.weaponmechanics.listeners.ResourcePackListener;
 import me.deecaad.weaponmechanics.listeners.WeaponListeners;
 import me.deecaad.weaponmechanics.listeners.trigger.TriggerEntityListeners;
@@ -275,6 +276,8 @@ public class WeaponMechanics extends MechanicsPlugin {
         pm.registerEvents(new WeaponListeners(weaponHandler), this);
         pm.registerEvents(new ExplosionInteractionListeners(), this);
 
+        pm.registerEvents(new AmmoModifierListener(resolveBulletResistanceKey(pm)), this);
+
         if (resourcePackListener == null) {
             debugger.warning("Failed to register ResourcePackListener... users will not automatically download the resource pack!");
         } else {
@@ -292,6 +295,33 @@ public class WeaponMechanics extends MechanicsPlugin {
         }
 
         return super.handleListeners();
+    }
+
+    /**
+     * Ищет StalkerCore через PluginManager и получает его NamespacedKey пулестойкости
+     * через рефлексию — без какой-либо compile-time зависимости на StalkerCore.
+     * Если плагин не найден или метод переименован — возвращает null,
+     * и Armor_Penetration просто не работает.
+     */
+    private @Nullable org.bukkit.NamespacedKey resolveBulletResistanceKey(org.bukkit.plugin.PluginManager pm) {
+        org.bukkit.plugin.Plugin stalker = pm.getPlugin("StalkerCore");
+        if (stalker == null) {
+            debugger.info("StalkerCore not found — Armor_Penetration disabled");
+            return null;
+        }
+        try {
+            java.lang.reflect.Method method = stalker.getClass().getMethod("getBulletResistanceKey");
+            Object result = method.invoke(stalker);
+            if (result instanceof org.bukkit.NamespacedKey key) {
+                debugger.info("Hooked into StalkerCore — Armor_Penetration enabled");
+                return key;
+            }
+        } catch (NoSuchMethodException e) {
+            debugger.warning("StalkerCore found but getBulletResistanceKey() not found — Armor_Penetration disabled");
+        } catch (Exception e) {
+            debugger.warning("Failed to get BulletResistanceKey from StalkerCore: " + e.getMessage());
+        }
+        return null;
     }
 
     @Override
