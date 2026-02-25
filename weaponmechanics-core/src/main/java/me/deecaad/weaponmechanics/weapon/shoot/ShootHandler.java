@@ -612,7 +612,8 @@ public class ShootHandler implements IValidator, TriggerListener {
         WeaponPostShootEvent event = new WeaponPostShootEvent(weaponTitle, weaponStack, entityWrapper.getEntity(), slot, unscopeAfterShot);
         Bukkit.getPluginManager().callEvent(event);
 
-        // Показываем скин выстрела (Shoot) если он задан в конфиге
+        // Сбрасываем Shoot скин через 250мс после выстрела
+        weaponHandler.getSkinHandler().scheduleShootSkinReset(entityWrapper, weaponTitle, weaponStack, slot);
 
         // Unscope after shoot for #73
         // Must unscope AFTER shooting so spread works properly

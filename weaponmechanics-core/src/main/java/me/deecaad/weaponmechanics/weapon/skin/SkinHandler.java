@@ -19,6 +19,21 @@ public class SkinHandler {
         this.weaponHandler = weaponHandler;
     }
 
+    /**
+     * Вызывается после каждого выстрела.
+     * Через 250мс обновляет скин — чтобы сбросить Shoot когда игрок стоит и не двигается.
+     */
+    public void scheduleShootSkinReset(EntityWrapper entityWrapper, String weaponTitle, ItemStack weaponStack, EquipmentSlot slot) {
+        SkinSelector skins = WeaponMechanics.getInstance().getWeaponConfigurations().getObject(weaponTitle + ".Skin", SkinSelector.class);
+        if (skins == null || !skins.hasAction(null, SkinSelector.SkinAction.SHOOT))
+            return;
+
+        // 250мс = 5 тиков — чуть больше чем isRightClicking() таймер (215мс)
+        Bukkit.getScheduler().runTaskLater(WeaponMechanics.getInstance(), () -> {
+            tryUse(entityWrapper, weaponTitle, weaponStack, slot);
+        }, 5L);
+    }
+
     public boolean tryUse(EntityWrapper entityWrapper, String weaponTitle, ItemStack weaponStack, EquipmentSlot slot) {
         return tryUse(null, entityWrapper, weaponTitle, weaponStack, slot, false);
     }
@@ -60,10 +75,6 @@ public class SkinHandler {
 
         EntityWrapper entityWrapper = hand.getEntityWrapper();
 
-        // Shoot скин — наивысший приоритет (пока зажата кнопка стрельбы)
-        if (entityWrapper.isRightClicking() && skins.hasAction(skin, SkinSelector.SkinAction.SHOOT))
-            return SkinSelector.SkinAction.SHOOT;
-
         if ((!hand.isReloading() || !skins.hasAction(skin, SkinSelector.SkinAction.RELOAD)) && CustomTag.AMMO_LEFT.getInteger(weaponStack) == 0) {
             if (skins.hasAction(skin, SkinSelector.SkinAction.NO_AMMO))
                 return SkinSelector.SkinAction.NO_AMMO;
@@ -87,6 +98,10 @@ public class SkinHandler {
         // since the event is also cancellable. This ignores the cancelling of sprint event,
         // it doesn't do anything if its cancelled anyway :p
         // + disable when dual wielding ++ don't even try when its END_SPRINT
+        // Shoot — перебивает Sprint
+        if (entityWrapper.isRightClicking() && skins.hasAction(skin, SkinSelector.SkinAction.SHOOT))
+            return SkinSelector.SkinAction.SHOOT;
+
         if (triggerType != TriggerType.END_SPRINT
                 && (entityWrapper.isSprinting() || triggerType == TriggerType.START_SPRINT)
                 && !entityWrapper.isDualWieldingWeapons()) {
