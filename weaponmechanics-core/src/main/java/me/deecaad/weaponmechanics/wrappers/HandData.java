@@ -51,6 +51,9 @@ public class HandData {
 
     private String currentWeaponTitle;
 
+    // Shoot skin: сколько тиков осталось показывать скин выстрела
+    private int shootSkinTicksLeft = 0;
+
     public HandData(EntityWrapper entityWrapper, boolean mainhand) {
         this.entityWrapper = entityWrapper;
         this.mainhand = mainhand;
@@ -96,7 +99,7 @@ public class HandData {
             firedWeaponStopShootEvent = true;
 
             Bukkit.getPluginManager().callEvent(new WeaponStopShootingEvent(lastWeaponShotTitle, lastWeaponShot, entityWrapper.getEntity(), mainhand ? EquipmentSlot.HAND : EquipmentSlot.OFF_HAND,
-                lastShotTime));
+                    lastShotTime));
         }
 
         if (!trySkinUpdate)
@@ -250,7 +253,7 @@ public class HandData {
             reloadTasks.clear();
 
             Bukkit.getPluginManager().callEvent(new WeaponReloadCancelEvent(reloadWeaponTitle, reloadWeaponStack, entityWrapper.getEntity(), mainhand ? EquipmentSlot.HAND : EquipmentSlot.OFF_HAND,
-                getReloadElapsedTime()));
+                    getReloadElapsedTime()));
 
             reloadWeaponStack = null;
             reloadWeaponTitle = null;
@@ -316,6 +319,19 @@ public class HandData {
 
     public String getCurrentWeaponTitle() {
         return currentWeaponTitle;
+    }
+
+    public boolean isShooting() {
+        return shootSkinTicksLeft > 0;
+    }
+
+    public void startShootSkin(int ticks) {
+        this.shootSkinTicksLeft = ticks;
+    }
+
+    public void tickShootSkin() {
+        if (shootSkinTicksLeft > 0)
+            shootSkinTicksLeft--;
     }
 
     /**

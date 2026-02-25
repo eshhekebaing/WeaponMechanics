@@ -14,7 +14,7 @@ public interface SkinSelector {
      * Returns the default skin (The skin used when given by command, and often when just sitting in the
      * inventory). This method ignores player preference, the {@link SkinAction}, and any attachments,
      * this method simply returns the default skin.
-     * 
+     *
      * @return The default skin.
      */
     @NotNull BaseSkin getDefaultSkin();
@@ -83,13 +83,14 @@ public interface SkinSelector {
     class SkinAction {
 
         public static final SkinAction DEFAULT = new SkinAction("Default");
+        public static final SkinAction SHOOT = new SkinAction("Shoot");
         public static final SkinAction SCOPE = new SkinAction("Scope");
         public static final SkinAction SCOPE_STACK = new SkinAction("Scope_\\d\\d?", true);
         public static final SkinAction NO_AMMO = new SkinAction("No_Ammo");
         public static final SkinAction RELOAD = new SkinAction("Reload");
         public static final SkinAction SPRINT = new SkinAction("Sprint");
 
-        private static final SkinAction[] VALUES = new SkinAction[]{DEFAULT, SCOPE, SCOPE_STACK, NO_AMMO, RELOAD, SPRINT};
+        private static final SkinAction[] VALUES = new SkinAction[]{DEFAULT, SHOOT, SCOPE, SCOPE_STACK, NO_AMMO, RELOAD, SPRINT};
 
         private final String key;
         private final boolean useRegex;

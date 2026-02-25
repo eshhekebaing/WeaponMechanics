@@ -10,6 +10,7 @@ import org.jetbrains.annotations.NotNull;
 public class WeaponPlaceholderHandlers {
     public static final @NotNull PlaceholderHandler AMMO_AVAILABLE = register(new PAmmoAvailable());
     public static final @NotNull PlaceholderHandler AMMO_LEFT = register(new PAmmoLeft());
+    public static final @NotNull PlaceholderHandler AMMO_LEFT_DISPLAY = register(new PAmmoLeftDisplay());
     public static final @NotNull PlaceholderHandler AMMO_TYPE = register(new PAmmoType());
     public static final @NotNull PlaceholderHandler DURABILITY = register(new PDurability());
     public static final @NotNull PlaceholderHandler FIREARM_STATE = register(new PFirearmState());

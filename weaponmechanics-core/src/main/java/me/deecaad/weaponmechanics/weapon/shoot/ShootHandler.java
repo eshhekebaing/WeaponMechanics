@@ -128,7 +128,7 @@ public class ShootHandler implements IValidator, TriggerListener {
         if (!hasPermission) {
             if (shooter instanceof Player player) {
                 PlaceholderMessage permissionMessage = new PlaceholderMessage(WeaponMechanics.getInstance().getConfiguration().getString("Messages.Permissions.Use_Weapon", ChatColor.RED + "You do not have permission to use "
-                    + weaponTitle));
+                        + weaponTitle));
                 Component component = permissionMessage.replaceAndDeserialize(PlaceholderData.of(player, weaponStack, weaponTitle, slot));
                 player.sendMessage(component);
             }
@@ -227,15 +227,15 @@ public class ShootHandler implements IValidator, TriggerListener {
             return switch (selectiveFireState) {
                 case BURST -> burstShot(entityWrapper, weaponTitle, weaponStack, handData, slot, dualWield);
                 case AUTO ->
-                    fullAutoShot(entityWrapper, weaponTitle, weaponStack, handData, slot, triggerType, dualWield);
+                        fullAutoShot(entityWrapper, weaponTitle, weaponStack, handData, slot, triggerType, dualWield);
                 default -> singleShot(entityWrapper, weaponTitle, weaponStack, handData, slot, dualWield, false);
             };
         }
 
         // First try full auto, then burst, then single fire
         return fullAutoShot(entityWrapper, weaponTitle, weaponStack, handData, slot, triggerType, dualWield)
-            || burstShot(entityWrapper, weaponTitle, weaponStack, handData, slot, dualWield)
-            || singleShot(entityWrapper, weaponTitle, weaponStack, handData, slot, dualWield, false);
+                || burstShot(entityWrapper, weaponTitle, weaponStack, handData, slot, dualWield)
+                || singleShot(entityWrapper, weaponTitle, weaponStack, handData, slot, dualWield, false);
     }
 
     private boolean singleShot(EntityWrapper entityWrapper, String weaponTitle, ItemStack weaponStack, HandData handData, EquipmentSlot slot, boolean dualWield, boolean isMelee) {
@@ -368,7 +368,7 @@ public class ShootHandler implements IValidator, TriggerListener {
 
         // If state is ready, check if this shot should not cause firearm actions
         if (state == FirearmState.READY
-            && (weaponHandler.getReloadHandler().getAmmoLeft(weaponStack, weaponTitle) % firearmAction.getFirearmActionFrequency() != 0
+                && (weaponHandler.getReloadHandler().getAmmoLeft(weaponStack, weaponTitle) % firearmAction.getFirearmActionFrequency() != 0
                 || !firearmAction.getFirearmType().hasShootActions())) {
             return;
         }
@@ -496,8 +496,8 @@ public class ShootHandler implements IValidator, TriggerListener {
         }
 
         if (slot == EquipmentSlot.HAND
-            ? reloadHandler.getAmmoLeft(entityWrapper.getEntity().getEquipment().getItemInOffHand(), null) == 0
-            : reloadHandler.getAmmoLeft(entityWrapper.getEntity().getEquipment().getItemInMainHand(), null) == 0) {
+                ? reloadHandler.getAmmoLeft(entityWrapper.getEntity().getEquipment().getItemInOffHand(), null) == 0
+                : reloadHandler.getAmmoLeft(entityWrapper.getEntity().getEquipment().getItemInMainHand(), null) == 0) {
             // Now we know that both weapons are empty assuming the other weapon's ammo amount is already
             // checked before this
 
@@ -527,14 +527,14 @@ public class ShootHandler implements IValidator, TriggerListener {
         RecoilProfile recoil = config.getObject(weaponTitle + ".Shoot.Recoil", RecoilProfile.class);
 
         PrepareWeaponShootEvent prepareEvent = new PrepareWeaponShootEvent(
-            weaponTitle, weaponStack, entityWrapper.getEntity(), slot,
-            shootMechanics,
-            resetFallDistance,
-            projectile,
-            projectileSpeed,
-            projectileAmount,
-            spread,
-            recoil);
+                weaponTitle, weaponStack, entityWrapper.getEntity(), slot,
+                shootMechanics,
+                resetFallDistance,
+                projectile,
+                projectileSpeed,
+                projectileAmount,
+                spread,
+                recoil);
         Bukkit.getPluginManager().callEvent(prepareEvent);
         if (prepareEvent.isCancelled())
             return;
@@ -611,6 +611,8 @@ public class ShootHandler implements IValidator, TriggerListener {
         boolean unscopeAfterShot = config.getBoolean(weaponTitle + ".Scope.Unscope_After_Shot");
         WeaponPostShootEvent event = new WeaponPostShootEvent(weaponTitle, weaponStack, entityWrapper.getEntity(), slot, unscopeAfterShot);
         Bukkit.getPluginManager().callEvent(event);
+
+        // Показываем скин выстрела (Shoot) если он задан в конфиге
 
         // Unscope after shoot for #73
         // Must unscope AFTER shooting so spread works properly
@@ -781,29 +783,29 @@ public class ShootHandler implements IValidator, TriggerListener {
 
             if (!invalidTrigger.isEmpty()) {
                 throw data.exception("Trigger", "Full_Automatic cannot use the trigger: " + invalidTrigger,
-                    "Fully_Automatic can only use the following triggers:",
-                    "START_SNEAK, START_SPRINT, RIGHT_CLICK, START_SWIM, START_GLIDE, START_WALK, START_IN_MIDAIR and START_STAND.");
+                        "Fully_Automatic can only use the following triggers:",
+                        "START_SNEAK, START_SPRINT, RIGHT_CLICK, START_SWIM, START_GLIDE, START_WALK, START_IN_MIDAIR and START_STAND.");
             }
         }
 
         String defaultSelectiveFire = configuration.getString(data.getKey() + ".Selective_Fire.Default");
         if (defaultSelectiveFire != null) {
             if (!defaultSelectiveFire.equalsIgnoreCase("SINGLE")
-                && !defaultSelectiveFire.equalsIgnoreCase("BURST")
-                && !defaultSelectiveFire.equalsIgnoreCase("AUTO")) {
+                    && !defaultSelectiveFire.equalsIgnoreCase("BURST")
+                    && !defaultSelectiveFire.equalsIgnoreCase("AUTO")) {
 
                 throw SerializerException.builder()
-                    .locationRaw(data.of("Selective_Fire.Default").getLocation())
-                    .buildInvalidOption(defaultSelectiveFire, Arrays.asList("SINGLE", "BURST", "AUTO"));
+                        .locationRaw(data.of("Selective_Fire.Default").getLocation())
+                        .buildInvalidOption(defaultSelectiveFire, Arrays.asList("SINGLE", "BURST", "AUTO"));
 
             }
         }
 
         if (data.has("Custom_Durability")) {
             throw SerializerException.builder()
-                .addMessage("since 4.0.0, Custom_Durability is no longer supported. Check the ItemSerializer wiki for new information.")
-                .addMessage("New system: https://cjcrafter.gitbook.io/core/item-serializer")
-                .build();
+                    .addMessage("since 4.0.0, Custom_Durability is no longer supported. Check the ItemSerializer wiki for new information.")
+                    .addMessage("New system: https://cjcrafter.gitbook.io/core/item-serializer")
+                    .build();
         }
 
         configuration.set(data.getKey() + ".Reset_Fall_Distance", data.of("Reset_Fall_Distance").getBool().orElse(false));
@@ -812,7 +814,7 @@ public class ShootHandler implements IValidator, TriggerListener {
             configuration.set(data.getKey() + ".Haptic", data.of("Haptic").serialize(HapticSerializer.class).orElse(null));
         } else if (data.has("Haptic")) {
             throw data.exception("Haptic", "Tried to use haptics when Vivecraft_Spigot_Extensions was not installed",
-                "Install here: https://www.spigotmc.org/resources/33166/");
+                    "Install here: https://www.spigotmc.org/resources/33166/");
         }
     }
 
@@ -822,8 +824,8 @@ public class ShootHandler implements IValidator, TriggerListener {
 
         return switch (triggerType) {
             case START_SNEAK, START_SPRINT, RIGHT_CLICK,
-                START_SWIM, START_GLIDE, START_WALK,
-                START_IN_MIDAIR, START_STAND -> false;
+                 START_SWIM, START_GLIDE, START_WALK,
+                 START_IN_MIDAIR, START_STAND -> false;
             default -> true;
         };
     }

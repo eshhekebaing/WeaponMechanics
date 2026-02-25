@@ -58,6 +58,12 @@ public class SkinHandler {
         if (forceDefault)
             return SkinSelector.SkinAction.DEFAULT;
 
+        EntityWrapper entityWrapper = hand.getEntityWrapper();
+
+        // Shoot скин — наивысший приоритет (пока зажата кнопка стрельбы)
+        if (entityWrapper.isRightClicking() && skins.hasAction(skin, SkinSelector.SkinAction.SHOOT))
+            return SkinSelector.SkinAction.SHOOT;
+
         if ((!hand.isReloading() || !skins.hasAction(skin, SkinSelector.SkinAction.RELOAD)) && CustomTag.AMMO_LEFT.getInteger(weaponStack) == 0) {
             if (skins.hasAction(skin, SkinSelector.SkinAction.NO_AMMO))
                 return SkinSelector.SkinAction.NO_AMMO;
@@ -81,10 +87,9 @@ public class SkinHandler {
         // since the event is also cancellable. This ignores the cancelling of sprint event,
         // it doesn't do anything if its cancelled anyway :p
         // + disable when dual wielding ++ don't even try when its END_SPRINT
-        EntityWrapper entityWrapper = hand.getEntityWrapper();
         if (triggerType != TriggerType.END_SPRINT
-            && (entityWrapper.isSprinting() || triggerType == TriggerType.START_SPRINT)
-            && !entityWrapper.isDualWieldingWeapons()) {
+                && (entityWrapper.isSprinting() || triggerType == TriggerType.START_SPRINT)
+                && !entityWrapper.isDualWieldingWeapons()) {
 
             if (skins.hasAction(skin, SkinSelector.SkinAction.SPRINT))
                 return SkinSelector.SkinAction.SPRINT;
