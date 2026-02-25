@@ -36,8 +36,14 @@ public class WeaponProjectile extends AProjectile {
     private final ItemStack weaponStack;
     private final String weaponTitle;
     private final EquipmentSlot hand;
-    /** The ammo type title loaded in the weapon at the moment of firing. May be null (API shots, no ammo config). */
-    private @Nullable String ammoTitle;
+
+    /**
+     * Название типа патрона, которым был произведён выстрел.
+     * Может быть null, если патроны не настроены или выстрел совершён через API.
+     * Используется в DamageHandler для применения модификаторов патрона
+     * (урон, огонь, скорость, пробивание брони).
+     */
+    private final @Nullable String ammoTitle;
 
     private StickedData stickedData;
     private double throughAmount;
@@ -55,6 +61,7 @@ public class WeaponProjectile extends AProjectile {
 
     public WeaponProjectile(ProjectileSettings projectileSettings, LivingEntity shooter, Location location,
                             Vector motion, ItemStack weaponStack, String weaponTitle, EquipmentSlot hand,
+                            @Nullable String ammoTitle,
                             Sticky sticky, Through through, Bouncy bouncy) {
         super(shooter, location, motion);
 
@@ -66,6 +73,7 @@ public class WeaponProjectile extends AProjectile {
         this.weaponStack = weaponStack;
         this.weaponTitle = weaponTitle;
         this.hand = hand;
+        this.ammoTitle = ammoTitle;
 
         if (projectileSettings.isDisableEntityCollisions()) {
             this.rayTrace = new RayTrace()
@@ -92,7 +100,7 @@ public class WeaponProjectile extends AProjectile {
      * @return the cloned projectile
      */
     public WeaponProjectile clone(Location location, Vector motion) {
-        return new WeaponProjectile(projectileSettings, getShooter(), location, motion, weaponStack, weaponTitle, hand, sticky, through, bouncy);
+        return new WeaponProjectile(projectileSettings, getShooter(), location, motion, weaponStack, weaponTitle, hand, ammoTitle, sticky, through, bouncy);
     }
 
     public ProjectileSettings getProjectileSettings() {
@@ -249,33 +257,22 @@ public class WeaponProjectile extends AProjectile {
     }
 
     /**
-     * The ammo type that was loaded in the weapon when this projectile was fired.
-     * May be null if the weapon has no ammo config or was fired via the API.
-     *
-     * @return the ammo title, or null
-     */
-    public @Nullable String getAmmoTitle() {
-        return ammoTitle;
-    }
-
-    /**
-     * Called by {@link me.deecaad.weaponmechanics.weapon.shoot.ShootHandler} right after
-     * creating the projectile so that downstream systems (damage, StalkerCore) can read
-     * which ammo type caused this projectile.
-     *
-     * @param ammoTitle the ammo title, or null
-     */
-    public void setAmmoTitle(@Nullable String ammoTitle) {
-        this.ammoTitle = ammoTitle;
-    }
-
-    /**
      * Can be null through API
      *
      * @return the hand used to shoot this projectile.
      */
     public EquipmentSlot getHand() {
         return hand;
+    }
+
+    /**
+     * Название типа патрона, которым был произведён выстрел.
+     * Может быть null, если патроны не сконфигурированы или выстрел через API.
+     *
+     * @return ammo title или null
+     */
+    public @Nullable String getAmmoTitle() {
+        return ammoTitle;
     }
 
     /**

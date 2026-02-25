@@ -23,6 +23,8 @@ import me.deecaad.weaponmechanics.weapon.info.WeaponInfoDisplay;
 import me.deecaad.weaponmechanics.weapon.projectile.weaponprojectile.Projectile;
 import me.deecaad.weaponmechanics.weapon.projectile.weaponprojectile.WeaponProjectile;
 import me.deecaad.weaponmechanics.weapon.reload.ReloadHandler;
+import me.deecaad.weaponmechanics.weapon.reload.ammo.Ammo;
+import me.deecaad.weaponmechanics.weapon.reload.ammo.AmmoConfig;
 import me.deecaad.weaponmechanics.weapon.shoot.recoil.RecoilProfile;
 import me.deecaad.weaponmechanics.weapon.shoot.spread.Spread;
 import me.deecaad.weaponmechanics.weapon.stats.WeaponStat;
@@ -49,8 +51,6 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
-import me.deecaad.weaponmechanics.weapon.reload.ammo.Ammo;
-import me.deecaad.weaponmechanics.weapon.reload.ammo.AmmoConfig;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.Nullable;
 
@@ -598,25 +598,17 @@ public class ShootHandler implements IValidator, TriggerListener {
 
                 motion.multiply(prepareEvent.getProjectileSpeed());
 
-                // ── Bullet type: apply velocity multiplier ─────────────────────────
+                // Применяем множитель скорости из типа патрона (если настроен)
                 AmmoConfig ammoConfig = config.getObject(weaponTitle + ".Reload.Ammo", AmmoConfig.class);
-                Ammo currentAmmo = (ammoConfig != null && weaponStack != null)
-                        ? ammoConfig.getCurrentAmmo(weaponStack)
-                        : null;
-
-                if (currentAmmo != null && currentAmmo.getVelocityMultiplier() != 1.0) {
-                    motion.multiply(currentAmmo.getVelocityMultiplier());
+                if (ammoConfig != null && weaponStack != null) {
+                    double velocityMult = ammoConfig.getCurrentAmmo(weaponStack).getVelocityMultiplier();
+                    if (velocityMult != 1.0) {
+                        motion.multiply(velocityMult);
+                    }
                 }
-                // ──────────────────────────────────────────────────────────────────
 
                 // Only create bullet first if WeaponShootEvent changes
                 WeaponProjectile bullet = prepareEvent.getProjectile().create(livingEntity, perProjectileShootLocation, motion, weaponStack, weaponTitle, slot);
-
-                // ── Bullet type: stamp ammo title onto projectile ──────────────────
-                if (currentAmmo != null) {
-                    bullet.setAmmoTitle(currentAmmo.getAmmoTitle());
-                }
-                // ──────────────────────────────────────────────────────────────────
 
                 WeaponShootEvent shootEvent = new WeaponShootEvent(bullet);
                 Bukkit.getPluginManager().callEvent(shootEvent);
