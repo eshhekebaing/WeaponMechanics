@@ -19,16 +19,48 @@ public class Ammo implements Serializer<Ammo> {
     private String symbol;
     private IAmmoType type;
 
+    // ── Bullet type modifiers ──────────────────────────────────────────────
+    // Все поля опциональны. Дефолты: нейтральные значения (нет эффекта).
+
+    /** Множитель урона. 1.0 = без изменений, 1.2 = +20%, 0.8 = -20%. */
+    private double damageModifier = 1.0;
+
+    /**
+     * Сколько тиков жертва будет гореть после попадания.
+     * 0 = не поджигает. 100 тиков = 5 секунд.
+     */
+    private int fireTicks = 0;
+
+    /**
+     * Множитель скорости снаряда. 1.0 = стандарт, 1.15 = +15% (бронебойный),
+     * 0.7 = -30% (дозвуковой).
+     */
+    private double velocityMultiplier = 1.0;
+
+    /**
+     * Пробивание брони от 0.0 до 1.0.
+     * 0.0 = броня работает в полную силу.
+     * 0.5 = броня работает на 50% (половина сопротивления игнорируется).
+     * 1.0 = броня полностью игнорируется.
+     * Используется StalkerCore в WeaponDamageListener.
+     */
+    private double armorPenetration = 0.0;
+
     /**
      * Default constructor for serializer.
      */
     public Ammo() {
     }
 
-    public Ammo(@NotNull String ammoTitle, @Nullable String symbol, @NotNull IAmmoType type) {
-        this.ammoTitle = ammoTitle;
-        this.symbol = symbol;
-        this.type = type;
+    public Ammo(@NotNull String ammoTitle, @Nullable String symbol, @NotNull IAmmoType type,
+                double damageModifier, int fireTicks, double velocityMultiplier, double armorPenetration) {
+        this.ammoTitle          = ammoTitle;
+        this.symbol             = symbol;
+        this.type               = type;
+        this.damageModifier     = damageModifier;
+        this.fireTicks          = fireTicks;
+        this.velocityMultiplier = velocityMultiplier;
+        this.armorPenetration   = armorPenetration;
     }
 
     public @NotNull String getAmmoTitle() {
@@ -47,6 +79,30 @@ public class Ammo implements Serializer<Ammo> {
         return type;
     }
 
+    /** Множитель урона патрона. 1.0 = без изменений. */
+    public double getDamageModifier() {
+        return damageModifier;
+    }
+
+    /** Тики огня при попадании. 0 = не поджигает. 100 = 5 сек. */
+    public int getFireTicks() {
+        return fireTicks;
+    }
+
+    /** Множитель скорости снаряда. 1.0 = стандарт. */
+    public double getVelocityMultiplier() {
+        return velocityMultiplier;
+    }
+
+    /**
+     * Пробивание брони [0.0 – 1.0].
+     * 0.0 = броня в полную силу, 1.0 = броня полностью игнорируется.
+     * Используется StalkerCore в WeaponDamageListener.
+     */
+    public double getArmorPenetration() {
+        return armorPenetration;
+    }
+
     @NotNull @Override
     public Ammo serialize(@NotNull SerializeData data) throws SerializerException {
         String[] split = data.getKey().split("\\.");
@@ -55,9 +111,15 @@ public class Ammo implements Serializer<Ammo> {
 
         if (data.has("Ammo_Types")) {
             throw data.exception("Ammo_Types", "Ammo_Types is outdated since WeaponMechanics 3.0.0",
-                "In order to use Ammo, you should update your configs. Check the wiki for more info:",
-                "https://cjcrafter.gitbook.io/weaponmechanics/weapon-modules/reload/ammo");
+                    "In order to use Ammo, you should update your configs. Check the wiki for more info:",
+                    "https://cjcrafter.gitbook.io/weaponmechanics/weapon-modules/reload/ammo");
         }
+
+        // ── Bullet type modifiers (все опциональны) ───────────────────────
+        double damageModifier     = data.of("Damage_Modifier").assertRange(0.0, null).getDouble().orElse(1.0);
+        int    fireTicks          = data.of("Fire_Ticks").assertRange(0, null).getInt().orElse(0);
+        double velocityMultiplier = data.of("Velocity_Multiplier").assertRange(0.0, null).getDouble().orElse(1.0);
+        double armorPenetration   = data.of("Armor_Penetration").assertRange(0.0, 1.0).getDouble().orElse(0.0);
 
         // Ammo can use 1 of Experience, Money, or Items.
         int count = 0;
@@ -117,7 +179,7 @@ public class Ammo implements Serializer<Ammo> {
             throw data.exception(null, "Something went wrong... Check your Ammo config to make sure it is correct!");
         }
 
-        return new Ammo(ammoTitle, symbol, ammoType);
+        return new Ammo(ammoTitle, symbol, ammoType, damageModifier, fireTicks, velocityMultiplier, armorPenetration);
     }
 
     @Override

@@ -13,6 +13,7 @@ import me.deecaad.core.mechanics.Mechanics;
 import me.deecaad.weaponmechanics.WeaponMechanics;
 import me.deecaad.weaponmechanics.weapon.explode.Explosion;
 import me.deecaad.weaponmechanics.weapon.explode.ExplosionTrigger;
+import me.deecaad.weaponmechanics.weapon.reload.ammo.AmmoConfig;
 import org.bukkit.Location;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -119,7 +120,17 @@ public class Projectile implements Serializer<Projectile> {
      * @param weaponTitle the weapon title used to shoot
      */
     public WeaponProjectile create(LivingEntity shooter, Location location, Vector motion, ItemStack weaponStack, String weaponTitle, EquipmentSlot hand) {
-        return new WeaponProjectile(projectileSettings, shooter, location, motion, weaponStack, weaponTitle, hand, sticky, through, bouncy);
+        // Определяем текущий тип патрона из weaponStack (если настроен)
+        String ammoTitle = null;
+        if (weaponStack != null && weaponTitle != null) {
+            AmmoConfig ammoConfig = WeaponMechanics.getInstance()
+                    .getWeaponConfigurations()
+                    .getObject(weaponTitle + ".Reload.Ammo", AmmoConfig.class);
+            if (ammoConfig != null) {
+                ammoTitle = ammoConfig.getCurrentAmmo(weaponStack).getAmmoTitle();
+            }
+        }
+        return new WeaponProjectile(projectileSettings, shooter, location, motion, weaponStack, weaponTitle, hand, ammoTitle, sticky, through, bouncy);
     }
 
     @Override

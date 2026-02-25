@@ -10,6 +10,8 @@ import me.deecaad.weaponmechanics.utils.MetadataKey;
 import me.deecaad.weaponmechanics.weapon.WeaponHandler;
 import me.deecaad.weaponmechanics.weapon.explode.Explosion;
 import me.deecaad.weaponmechanics.weapon.projectile.weaponprojectile.WeaponProjectile;
+import me.deecaad.weaponmechanics.weapon.reload.ammo.Ammo;
+import me.deecaad.weaponmechanics.weapon.reload.ammo.AmmoConfig;
 import me.deecaad.weaponmechanics.weapon.stats.PlayerStat;
 import me.deecaad.weaponmechanics.weapon.stats.WeaponStat;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponDamageEntityEvent;
@@ -55,6 +57,26 @@ public class DamageHandler {
         int armorDamage = config.getInt(source.getWeaponTitle() + ".Damage.Armor_Damage");
         int fireTicks = config.getInt(source.getWeaponTitle() + ".Damage.Fire_Ticks");
 
+        // ── Bullet type modifiers ──────────────────────────────────────────
+        // If this damage came from a projectile, read its stamped ammo title
+        // and apply damage_modifier + extra fire_ticks from the Ammo config.
+        if (source instanceof ProjectileDamageSource projectileDamageSource) {
+            String ammoTitle = projectileDamageSource.getProjectile().getAmmoTitle();
+            if (ammoTitle != null) {
+                Ammo ammo = WeaponMechanics.getInstance().getAmmoConfigurations()
+                        .getObject(ammoTitle, Ammo.class);
+                if (ammo != null) {
+                    if (ammo.getDamageModifier() != 1.0) {
+                        damage *= ammo.getDamageModifier();
+                    }
+                    if (ammo.getFireTicks() > 0) {
+                        fireTicks = Math.max(fireTicks, ammo.getFireTicks());
+                    }
+                }
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────
+
         // Check for per-weapon damage modifier. Otherwise, use default
         DamageModifier damageModifier;
         if (source instanceof ExplosionDamageSource) {
@@ -70,8 +92,8 @@ public class DamageHandler {
         // Make sure legacy-users have updated their config.yml file
         if (damageModifier == null) {
             WeaponMechanics.getInstance().debugger.severe("Could not find the default DamageModifiers... Are you using the outdated system?",
-                "In WeaponMechanics-2.5.0, we added a new damage system. Check the patch notes for an easy copy-paste solution",
-                "Your damage will not work until this is addressed");
+                    "In WeaponMechanics-2.5.0, we added a new damage system. Check the patch notes for an easy copy-paste solution",
+                    "Your damage will not work until this is addressed");
             return false;
         }
 
@@ -87,8 +109,8 @@ public class DamageHandler {
         MechanicManager feetMechanics = config.getObject(source.getWeaponTitle() + ".Damage.Feet.Mechanics", MechanicManager.class);
 
         WeaponDamageEntityEvent damageEntityEvent = new WeaponDamageEntityEvent(source, slot, victim, damage,
-            critChance, armorDamage, fireTicks, damageModifier, damageMechanics, killMechanics, backstabMechanics,
-            criticalHitMechanics, headMechanics, bodyMechanics, armsMechanics, legsMechanics, feetMechanics);
+                critChance, armorDamage, fireTicks, damageModifier, damageMechanics, killMechanics, backstabMechanics,
+                criticalHitMechanics, headMechanics, bodyMechanics, armsMechanics, legsMechanics, feetMechanics);
         Bukkit.getPluginManager().callEvent(damageEntityEvent);
         if (damageEntityEvent.isCancelled())
             return false;
@@ -133,7 +155,7 @@ public class DamageHandler {
             if (source instanceof ProjectileDamageSource projectileSource) {
                 float distanceTravelled = (float) projectileSource.getProjectile().getDistanceTravelled();
                 shooterData.set(source.getWeaponTitle(), WeaponStat.LONGEST_DISTANCE_HIT,
-                    (key, value) -> value == null ? distanceTravelled : Math.max((float) value, distanceTravelled));
+                        (key, value) -> value == null ? distanceTravelled : Math.max((float) value, distanceTravelled));
             }
         }
         if (victimData != null)
@@ -160,11 +182,11 @@ public class DamageHandler {
                 if (source instanceof ProjectileDamageSource projectileSource) {
                     float distanceTravelled = (float) projectileSource.getProjectile().getDistanceTravelled();
                     shooterData.set(source.getWeaponTitle(), WeaponStat.LONGEST_DISTANCE_KILL,
-                        (key, value) -> value == null ? distanceTravelled : Math.max((float) value, distanceTravelled));
+                            (key, value) -> value == null ? distanceTravelled : Math.max((float) value, distanceTravelled));
                 }
             }
         } else if (isShooterPlayer && config.getBoolean("Assists_Event.Enable", true)
-            && (!config.getBoolean("Assists_Event.Only_Players", true) || victim.getType() == EntityType.PLAYER)) {
+                && (!config.getBoolean("Assists_Event.Only_Players", true) || victim.getType() == EntityType.PLAYER)) {
 
             // If shot didn't kill entity, log assist damage
             AssistData assistData;
@@ -252,11 +274,11 @@ public class DamageHandler {
 
         String weaponTitle = projectile.getWeaponTitle();
         WeaponDamageSource source = new ExplosionDamageSource(
-            explosion,
-            projectile.getShooter(),
-            weaponTitle,
-            projectile.getWeaponStack(),
-            origin);
+                explosion,
+                projectile.getShooter(),
+                weaponTitle,
+                projectile.getWeaponStack(),
+                origin);
         double damage = config.getDouble(weaponTitle + ".Damage.Base_Explosion_Damage");
         if (damage == 0) {
             // If explosion damage isn't used, use Base_Damage

@@ -36,6 +36,8 @@ public class WeaponProjectile extends AProjectile {
     private final ItemStack weaponStack;
     private final String weaponTitle;
     private final EquipmentSlot hand;
+    /** The ammo type title loaded in the weapon at the moment of firing. May be null (API shots, no ammo config). */
+    private @Nullable String ammoTitle;
 
     private StickedData stickedData;
     private double throughAmount;
@@ -52,8 +54,8 @@ public class WeaponProjectile extends AProjectile {
     private final RayTrace rayTrace;
 
     public WeaponProjectile(ProjectileSettings projectileSettings, LivingEntity shooter, Location location,
-        Vector motion, ItemStack weaponStack, String weaponTitle, EquipmentSlot hand,
-        Sticky sticky, Through through, Bouncy bouncy) {
+                            Vector motion, ItemStack weaponStack, String weaponTitle, EquipmentSlot hand,
+                            Sticky sticky, Through through, Bouncy bouncy) {
         super(shooter, location, motion);
 
         this.projectileSettings = projectileSettings;
@@ -67,18 +69,18 @@ public class WeaponProjectile extends AProjectile {
 
         if (projectileSettings.isDisableEntityCollisions()) {
             this.rayTrace = new RayTrace()
-                .withBlockFilter(this::equalToLastHit)
-                .disableEntityChecks()
-                .enableLiquidChecks()
-                .withRaySize(projectileSettings.getSize());
+                    .withBlockFilter(this::equalToLastHit)
+                    .disableEntityChecks()
+                    .enableLiquidChecks()
+                    .withRaySize(projectileSettings.getSize());
         } else {
             this.rayTrace = new RayTrace()
-                .withBlockFilter(this::equalToLastHit)
-                .withEntityFilter(entity -> equalToLastHit(entity)
-                    || (getShooter() != null && getAliveTicks() < 10 && entity.getEntityId() == getShooter().getEntityId())
-                    || entity.getPassengers().contains(getShooter()))
-                .enableLiquidChecks()
-                .withRaySize(projectileSettings.getSize());
+                    .withBlockFilter(this::equalToLastHit)
+                    .withEntityFilter(entity -> equalToLastHit(entity)
+                            || (getShooter() != null && getAliveTicks() < 10 && entity.getEntityId() == getShooter().getEntityId())
+                            || entity.getPassengers().contains(getShooter()))
+                    .enableLiquidChecks()
+                    .withRaySize(projectileSettings.getSize());
         }
     }
 
@@ -247,6 +249,27 @@ public class WeaponProjectile extends AProjectile {
     }
 
     /**
+     * The ammo type that was loaded in the weapon when this projectile was fired.
+     * May be null if the weapon has no ammo config or was fired via the API.
+     *
+     * @return the ammo title, or null
+     */
+    public @Nullable String getAmmoTitle() {
+        return ammoTitle;
+    }
+
+    /**
+     * Called by {@link me.deecaad.weaponmechanics.weapon.shoot.ShootHandler} right after
+     * creating the projectile so that downstream systems (damage, StalkerCore) can read
+     * which ammo type caused this projectile.
+     *
+     * @param ammoTitle the ammo title, or null
+     */
+    public void setAmmoTitle(@Nullable String ammoTitle) {
+        this.ammoTitle = ammoTitle;
+    }
+
+    /**
      * Can be null through API
      *
      * @return the hand used to shoot this projectile.
@@ -272,9 +295,9 @@ public class WeaponProjectile extends AProjectile {
             this.stickedData = null;
             // This basically removes sticky
             setMotion(new Vector(
-                ThreadLocalRandom.current().nextFloat() * 0.2,
-                ThreadLocalRandom.current().nextFloat() * 0.2,
-                ThreadLocalRandom.current().nextFloat() * 0.2));
+                    ThreadLocalRandom.current().nextFloat() * 0.2,
+                    ThreadLocalRandom.current().nextFloat() * 0.2,
+                    ThreadLocalRandom.current().nextFloat() * 0.2));
             return;
         }
 
@@ -357,7 +380,7 @@ public class WeaponProjectile extends AProjectile {
         // Returns sorted list of hits
 
         List<RayTraceResult> hits = rayTrace.cast(getWorld(), getLocation(), possibleNextLocation, getNormalizedMotion(),
-            through == null ? 0.0 : through.getMaximumThroughAmount());
+                through == null ? 0.0 : through.getMaximumThroughAmount());
         if (hits == null) {
 
             // Check if can't keep rolling
@@ -476,12 +499,12 @@ public class WeaponProjectile extends AProjectile {
     private boolean equalToLastHit(Block hit) {
         Location hitBlock = hit.getLocation();
         return lastBlock != null && lastBlock.getBlockX() == hitBlock.getBlockX() && lastBlock.getBlockY() == hitBlock.getBlockY() && lastBlock.getBlockZ() == hitBlock.getBlockZ() // Check block
-            && getAliveTicks() <= lastBlockUpdateTick; // Check hit tick
+                && getAliveTicks() <= lastBlockUpdateTick; // Check hit tick
     }
 
     private boolean equalToLastHit(LivingEntity entity) {
         return lastEntity != -1 && lastEntity == entity.getEntityId() // Check entity
-            && getAliveTicks() <= lastEntityUpdateTick; // Check hit tick
+                && getAliveTicks() <= lastEntityUpdateTick; // Check hit tick
     }
 
     @Override
