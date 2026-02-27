@@ -15,18 +15,35 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
- * Применяет модификаторы патрона: Damage_Modifier, Velocity_Multiplier,
- * Armor_Penetration (против PDC-пулестойкости из StalkerCore), Fire_Ticks.
- * Порядок приоритетов:
- *   NORMAL — WeaponDamageListener (StalkerCore) считает сопротивление и пишет finalDamage
- *   HIGH   — этот listener читает уже изменённый finalDamage и возвращает часть урона,
- *            срезанную сопротивлением, пропорционально Armor_Penetration патрона.
+ * Применяет модификаторы патрона: Velocity_Multiplier, Armor_Penetration, Fire_Ticks.
+ *
+ * ВАЖНО: Damage_Modifier патрона применяется в DamageHandler ДО вызова события,
+ * поэтому здесь его применять НЕ нужно — иначе он применится дважды.
+ *
+ * ПОРЯДОК СОБЫТИЙ:
+ *   LOWEST  — WeaponDamageListener (StalkerCore) применяет пулестойкость к baseDamage
+ *   NORMAL  — этот листенер читает уменьшенный baseDamage и восстанавливает
+ *             часть урона пропорционально Armor_Penetration патрона
+ *   HIGH+   — DamageHandler считает getFinalDamage() с критами/хэдшотами
+ *
+ * Armor_Penetration логика (мультипликативная, совпадает с StalkerCore):
+ *   StalkerCore: baseDamage *= multiplier  (где multiplier = произведение (1-res) по слотам)
+ *   Пенетрация:  восстанавливаем часть срезанного урона:
+ *     lostToArmor = originalBase - reducedBase = originalBase * (1 - multiplier)
+ *     итог        = reducedBase + lostToArmor * penetration
+ *                 = originalBase * multiplier + originalBase * (1 - multiplier) * pen
+ *                 = originalBase * (multiplier + (1 - multiplier) * pen)
+ *
+ * Пример: броня 50%, патрон 100% пенетрации → итог = baseDamage * (0.5 + 0.5*1.0) = baseDamage (броня игнорируется)
+ * Пример: броня 50%, патрон 50% пенетрации  → итог = baseDamage * (0.5 + 0.5*0.5) = baseDamage * 0.75
  */
 public class AmmoModifierListener implements Listener {
 
+    private static final double EPSILON = 1e-6;
+
     /**
      * NamespacedKey пулестойкости из StalkerCore.
-     * Передаётся снаружи при регистрации — берётся напрямую из plugin.getBulletResistanceKey().
+     * Передаётся снаружи при регистрации — берётся через рефлексию из getBulletResistanceKey().
      * Если null — Armor_Penetration работать не будет (StalkerCore не загружен).
      */
     private final NamespacedKey bulletResistanceKey;
@@ -35,9 +52,9 @@ public class AmmoModifierListener implements Listener {
         this.bulletResistanceKey = bulletResistanceKey;
     }
 
-    // -------------------------------------------------------------------------
-    // Shoot — скорость
-    // -------------------------------------------------------------------------
+    // ──────────────────────────────────────────────────────────────
+    // Shoot — скорость пули
+    // ──────────────────────────────────────────────────────────────
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onPrepareShoot(PrepareWeaponShootEvent event) {
@@ -50,41 +67,36 @@ public class AmmoModifierListener implements Listener {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Damage — урон, пенетрация, поджог
-    // -------------------------------------------------------------------------
+    // ──────────────────────────────────────────────────────────────
+    // Damage — пенетрация брони и поджог
+    // ──────────────────────────────────────────────────────────────
 
     /**
-     * Приоритет HIGH — выполняется ПОСЛЕ WeaponDamageListener (NORMAL) из StalkerCore,
-     * который уже применил пулестойкость и записал finalDamage.
-     * Логика Armor_Penetration:
-     *   StalkerCore делает: finalDamage = baseDamage * (1 - totalResistance)
-     *   Мы знаем baseDamage и totalResistance, восстанавливаем срезанный урон:
-     *     lostToArmor = baseDamage - afterArmor
-     *     итог        = afterArmor + lostToArmor * penetration
+     * NORMAL — выполняется ПОСЛЕ WeaponDamageListener (LOWEST) из StalkerCore,
+     * который уже применил пулестойкость к baseDamage через setBaseDamage().
+     *
+     * НЕ применяем Damage_Modifier здесь — он уже применён в DamageHandler
+     * до вызова события (см. DamageHandler.java строка ~69).
      */
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onWeaponDamage(WeaponDamageEntityEvent event) {
         Ammo ammo = getCurrentAmmo(event.getWeaponTitle(), event.getWeaponStack());
         if (ammo == null) return;
 
-        // --- Damage_Modifier ---
-        double dmgMod = ammo.getDamageModifier();
-        if (dmgMod != 1.0) {
-            event.setBaseDamage(event.getBaseDamage() * dmgMod);
-        }
-
         // --- Armor_Penetration ---
         double pen = ammo.getArmorPenetration();
-        if (pen > 0.0 && bulletResistanceKey != null) {
-            double totalResistance = getTotalResistance(event.getVictim(), event.getWeaponTitle());
+        if (pen > EPSILON && bulletResistanceKey != null) {
+            // Считаем мультипликатор брони (то же что StalkerCore)
+            double armorMultiplier = calcArmorMultiplier(event.getVictim(), event.getWeaponTitle());
+            double totalReduction = 1.0 - armorMultiplier;
 
-            if (totalResistance > 0.0) {
-                double baseDamage  = event.getBaseDamage();
-                double afterArmor  = baseDamage * Math.max(0.0, 1.0 - totalResistance);
-                double lostToArmor = baseDamage - afterArmor;
-                double penetrated  = lostToArmor * pen;
-                event.setFinalDamage(afterArmor + penetrated);
+            if (totalReduction > EPSILON) {
+                // baseDamage уже уменьшен StalkerCore: reducedBase = originalBase * armorMultiplier
+                // Восстанавливаем часть срезанного урона:
+                //   newMultiplier = armorMultiplier + (1 - armorMultiplier) * pen
+                double newMultiplier = armorMultiplier + totalReduction * pen;
+                double originalBase  = event.getBaseDamage() / armorMultiplier; // восстанавливаем оригинал
+                event.setBaseDamage(originalBase * newMultiplier);
             }
         }
 
@@ -95,9 +107,9 @@ public class AmmoModifierListener implements Listener {
         }
     }
 
-    // -------------------------------------------------------------------------
+    // ──────────────────────────────────────────────────────────────
     // Helpers
-    // -------------------------------------------------------------------------
+    // ──────────────────────────────────────────────────────────────
 
     private Ammo getCurrentAmmo(String weaponTitle, ItemStack weaponStack) {
         if (weaponStack == null) return null;
@@ -112,29 +124,34 @@ public class AmmoModifierListener implements Listener {
     }
 
     /**
-     * Читает суммарное сопротивление из PDC брони жертвы —
-     * то же самое что делает WeaponDamageListener в StalkerCore.
+     * Считает мультипликативный множитель пулестойкости брони жертвы —
+     * ТОЧНО так же как WeaponDamageListener в StalkerCore.
+     * Результат: 1.0 = нет брони, 0.5 = 50% снижения урона.
      */
-    private double getTotalResistance(LivingEntity victim, String weaponTitle) {
-        if (victim.getEquipment() == null) return 0.0;
+    private double calcArmorMultiplier(LivingEntity victim, String weaponTitle) {
+        if (victim.getEquipment() == null) return 1.0;
 
-        double total = 0.0;
+        double multiplier = 1.0;
         for (ItemStack item : victim.getEquipment().getArmorContents()) {
             if (item == null || !item.hasItemMeta()) continue;
 
             PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
             String data = pdc.get(bulletResistanceKey, PersistentDataType.STRING);
+            if (data == null) continue;
 
-            if (data != null) {
-                total += parseResistance(data, weaponTitle);
+            double res = parseResistance(data, weaponTitle);
+            res = Math.max(0.0, Math.min(res, 1.0));
+
+            if (res > EPSILON) {
+                multiplier *= (1.0 - res);
             }
         }
-        return total;
+        return multiplier;
     }
 
     /**
      * Парсит строку PDC вида "Base:0.05;AK-47:0.1;SVD:0.0".
-     * Конкретное оружие перекрывает Base.
+     * Конкретное оружие имеет приоритет над Base.
      */
     private double parseResistance(String data, String weaponTitle) {
         double base = 0.0;
