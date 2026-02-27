@@ -16,16 +16,13 @@ import org.bukkit.persistence.PersistentDataType;
 
 /**
  * Применяет модификаторы патрона: Velocity_Multiplier, Armor_Penetration, Fire_Ticks.
- *
  * ВАЖНО: Damage_Modifier патрона применяется в DamageHandler ДО вызова события,
  * поэтому здесь его применять НЕ нужно — иначе он применится дважды.
- *
  * ПОРЯДОК СОБЫТИЙ:
  *   LOWEST  — WeaponDamageListener (StalkerCore) применяет пулестойкость к baseDamage
  *   NORMAL  — этот листенер читает уменьшенный baseDamage и восстанавливает
  *             часть урона пропорционально Armor_Penetration патрона
  *   HIGH+   — DamageHandler считает getFinalDamage() с критами/хэдшотами
- *
  * Armor_Penetration логика (мультипликативная, совпадает с StalkerCore):
  *   StalkerCore: baseDamage *= multiplier  (где multiplier = произведение (1-res) по слотам)
  *   Пенетрация:  восстанавливаем часть срезанного урона:
@@ -33,7 +30,6 @@ import org.bukkit.persistence.PersistentDataType;
  *     итог        = reducedBase + lostToArmor * penetration
  *                 = originalBase * multiplier + originalBase * (1 - multiplier) * pen
  *                 = originalBase * (multiplier + (1 - multiplier) * pen)
- *
  * Пример: броня 50%, патрон 100% пенетрации → итог = baseDamage * (0.5 + 0.5*1.0) = baseDamage (броня игнорируется)
  * Пример: броня 50%, патрон 50% пенетрации  → итог = baseDamage * (0.5 + 0.5*0.5) = baseDamage * 0.75
  */
@@ -74,7 +70,6 @@ public class AmmoModifierListener implements Listener {
     /**
      * NORMAL — выполняется ПОСЛЕ WeaponDamageListener (LOWEST) из StalkerCore,
      * который уже применил пулестойкость к baseDamage через setBaseDamage().
-     *
      * НЕ применяем Damage_Modifier здесь — он уже применён в DamageHandler
      * до вызова события (см. DamageHandler.java строка ~69).
      */
@@ -126,27 +121,32 @@ public class AmmoModifierListener implements Listener {
     /**
      * Считает мультипликативный множитель пулестойкости брони жертвы —
      * ТОЧНО так же как WeaponDamageListener в StalkerCore.
-     * Результат: 1.0 = нет брони, 0.5 = 50% снижения урона.
+     * StalkerCore хранит resistance как абсолютные единицы (20, 100, 200...),
+     * НЕ как доли. Формула:
+     *   reductionFactor = resistance / (BASE_HP + resistance)
+     *   multiplier = 1 - reductionFactor = BASE_HP / (BASE_HP + resistance)
+     * Результат: 1.0 = нет брони, 0.333 = 66.7% снижения (resistance=200).
      */
     private double calcArmorMultiplier(LivingEntity victim, String weaponTitle) {
         if (victim.getEquipment() == null) return 1.0;
 
-        double multiplier = 1.0;
-        for (ItemStack item : victim.getEquipment().getArmorContents()) {
-            if (item == null || !item.hasItemMeta()) continue;
+        // Читаем только нагрудник (слот 2) — так же как WeaponDamageListener
+        ItemStack[] armor = victim.getEquipment().getArmorContents();
+        ItemStack chestplate = armor[2];
+        if (chestplate == null || !chestplate.hasItemMeta()) return 1.0;
 
-            PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
-            String data = pdc.get(bulletResistanceKey, PersistentDataType.STRING);
-            if (data == null) continue;
+        PersistentDataContainer pdc = chestplate.getItemMeta().getPersistentDataContainer();
+        String data = pdc.get(bulletResistanceKey, PersistentDataType.STRING);
+        if (data == null) return 1.0;
 
-            double res = parseResistance(data, weaponTitle);
-            res = Math.max(0.0, Math.min(res, 1.0));
+        double resistance = parseResistance(data, weaponTitle);
+        if (resistance <= EPSILON) return 1.0;
 
-            if (res > EPSILON) {
-                multiplier *= (1.0 - res);
-            }
-        }
-        return multiplier;
+        // Та же формула что в WeaponDamageListener:
+        // reductionFactor = resistance / (BASE_HP + resistance)
+        // multiplier = 1 - reductionFactor = BASE_HP / (BASE_HP + resistance)
+        final double BASE_HP = 100.0;
+        return BASE_HP / (BASE_HP + resistance);
     }
 
     /**
