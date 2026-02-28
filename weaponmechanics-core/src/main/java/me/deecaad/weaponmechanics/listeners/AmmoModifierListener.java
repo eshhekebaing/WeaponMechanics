@@ -6,42 +6,99 @@ import me.deecaad.weaponmechanics.weapon.reload.ammo.AmmoConfig;
 import me.deecaad.weaponmechanics.weapon.weaponevents.PrepareWeaponShootEvent;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponDamageEntityEvent;
 import org.bukkit.NamespacedKey;
-import org.bukkit.entity.LivingEntity;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.persistence.PersistentDataContainer;
-import org.bukkit.persistence.PersistentDataType;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Применяет модификаторы патрона: Velocity_Multiplier, Armor_Penetration, Fire_Ticks.
- * ВАЖНО: Damage_Modifier патрона применяется в DamageHandler ДО вызова события,
- * поэтому здесь его применять НЕ нужно — иначе он применится дважды.
+ * <p>
+ * Damage_Modifier применяется в DamageHandler ДО вызова события — здесь не трогаем.
+ * <p>
  * ПОРЯДОК СОБЫТИЙ:
  *   LOWEST  — WeaponDamageListener (StalkerCore) применяет пулестойкость к baseDamage
- *   NORMAL  — этот листенер читает уменьшенный baseDamage и восстанавливает
- *             часть урона пропорционально Armor_Penetration патрона
+ *             и кладёт данные в SHARED_ORIGINAL_BASE_MAP через putOriginalBase()
+ *   NORMAL  — этот листенер читает originalBase из карты и применяет пенетрацию
  *   HIGH+   — DamageHandler считает getFinalDamage() с критами/хэдшотами
- * Armor_Penetration логика (мультипликативная, совпадает с StalkerCore):
- *   StalkerCore: baseDamage *= multiplier  (где multiplier = произведение (1-res) по слотам)
- *   Пенетрация:  восстанавливаем часть срезанного урона:
- *     lostToArmor = originalBase - reducedBase = originalBase * (1 - multiplier)
- *     итог        = reducedBase + lostToArmor * penetration
- *                 = originalBase * multiplier + originalBase * (1 - multiplier) * pen
- *                 = originalBase * (multiplier + (1 - multiplier) * pen)
- * Пример: броня 50%, патрон 100% пенетрации → итог = baseDamage * (0.5 + 0.5*1.0) = baseDamage (броня игнорируется)
- * Пример: броня 50%, патрон 50% пенетрации  → итог = baseDamage * (0.5 + 0.5*0.5) = baseDamage * 0.75
+ * <p>
+ * FIX #1 (главный): Убрано обратное вычисление originalBase через деление на armorMultiplier.
+ *   Старая логика: originalBase = reducedBase / armorMultiplier
+ *   Проблема: calcArmorMultiplier() не учитывал hpMultiplier из формулы StalkerCore.
+ *   При 200HP (hpMultiplier=2.0) и resistance=200:
+ *     StalkerCore reductionFactor = 200/((100+200)*2.0) = 0.333 -> reducedBase = orig*0.667
+ *     calcArmorMultiplier: multiplier = 100/(100+200) = 0.333
+ *     "восстановление": orig*0.667 / 0.333 = orig*2.0  <- вдвое больше реального!
+ *   Итог: AP-патроны наносили неверный (завышенный) урон.
+ *   Решение: StalkerCore сам кладёт originalBase в SHARED_ORIGINAL_BASE_MAP, берём оттуда.
+ * <p>
+ * FIX #2: Восстановление critChance после setBaseDamage().
+ *   setBaseDamage() в WM API сбрасывает wasCritical — без восстановления critChance
+ *   критические попадания с AP-патронами не работали совсем.
+ * <p>
+ * FIX #3: TTL-очистка SHARED_ORIGINAL_BASE_MAP.
+ *   Если событие отменялось между LOWEST и NORMAL — записи накапливались вечно (утечка памяти).
+ *   Теперь evictStaleEntries() вызывается из StalkerCore каждые 10 сек через scheduler.
  */
 public class AmmoModifierListener implements Listener {
 
     private static final double EPSILON = 1e-6;
 
     /**
-     * NamespacedKey пулестойкости из StalkerCore.
-     * Передаётся снаружи при регистрации — берётся через рефлексию из getBulletResistanceKey().
-     * Если null — Armor_Penetration работать не будет (StalkerCore не загружен).
+     * FIX #1: Статическая общая карта между этим классом (форк WM) и WeaponDamageListener (StalkerCore).
+     * <p>
+     * Почему static: StalkerCore не имеет compile-time зависимости на форк WM (только на API),
+     * поэтому передать экземпляр через конструктор нельзя. Static-поле доступно из StalkerCore
+     * через прямой импорт класса AmmoModifierListener — он виден т.к. форк WM является зависимостью.
+     * <p>
+     * WeaponDamageListener (StalkerCore) вызывает AmmoModifierListener.putOriginalBase(key, ...)
+     * на LOWEST, этот класс читает и удаляет запись на NORMAL.
+     * <p>
+     * Ключ: "UUID::weaponTitle" — уникален для каждой пары жертва+оружие.
+     * Значение: double[] { originalBase, reductionFactor, totalResistance, effectiveHP }
      */
+    public static final Map<String, double[]> SHARED_ORIGINAL_BASE_MAP = new ConcurrentHashMap<>();
+
+    /** FIX #3: Метки времени вставки для TTL-очистки. */
+    private static final Map<String, Long> INSERT_TIMESTAMPS = new ConcurrentHashMap<>();
+    private static final long ENTRY_TTL_MS = 5_000L;
+
+    /**
+     * Статический метод — вызывается из WeaponDamageListener (StalkerCore) на LOWEST.
+     *
+     * @param mapKey         "UUID::weaponTitle"
+     * @param originalBase   baseDamage ДО применения пулестойкости StalkerCore
+     * @param reductionFactor доля срезанного урона (0..1), = totalResistance / effectiveHP
+     * @param totalResistance суммарная пулестойкость (для лога/отладки)
+     * @param effectiveHP    приведённое HP (для лога/отладки)
+     */
+    public static void putOriginalBase(String mapKey, double originalBase,
+                                       double reductionFactor, double totalResistance, double effectiveHP) {
+        SHARED_ORIGINAL_BASE_MAP.put(mapKey, new double[]{ originalBase, reductionFactor, totalResistance, effectiveHP });
+        INSERT_TIMESTAMPS.put(mapKey, System.currentTimeMillis());
+    }
+
+    /**
+     * FIX #3: TTL-очистка. Вызывается из StalkerCore scheduler каждые 10 сек.
+     * Удаляет записи старше 5 сек — они точно уже не будут прочитаны NORMAL-обработчиком.
+     */
+    public static void evictStaleEntries() {
+        long now = System.currentTimeMillis();
+        INSERT_TIMESTAMPS.entrySet().removeIf(e -> {
+            if (now - e.getValue() > ENTRY_TTL_MS) {
+                SHARED_ORIGINAL_BASE_MAP.remove(e.getKey());
+                return true;
+            }
+            return false;
+        });
+    }
+
+    // bulletResistanceKey оставлен чтобы не менять сигнатуру конструктора
+    // и не трогать WeaponMechanics.java / resolveBulletResistanceKey().
+    // Больше не используется внутри для вычислений.
     private final NamespacedKey bulletResistanceKey;
 
     public AmmoModifierListener(NamespacedKey bulletResistanceKey) {
@@ -67,12 +124,6 @@ public class AmmoModifierListener implements Listener {
     // Damage — пенетрация брони и поджог
     // ──────────────────────────────────────────────────────────────
 
-    /**
-     * NORMAL — выполняется ПОСЛЕ WeaponDamageListener (LOWEST) из StalkerCore,
-     * который уже применил пулестойкость к baseDamage через setBaseDamage().
-     * НЕ применяем Damage_Modifier здесь — он уже применён в DamageHandler
-     * до вызова события (см. DamageHandler.java строка ~69).
-     */
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
     public void onWeaponDamage(WeaponDamageEntityEvent event) {
         Ammo ammo = getCurrentAmmo(event.getWeaponTitle(), event.getWeaponStack());
@@ -80,18 +131,30 @@ public class AmmoModifierListener implements Listener {
 
         // --- Armor_Penetration ---
         double pen = ammo.getArmorPenetration();
-        if (pen > EPSILON && bulletResistanceKey != null) {
-            // Считаем мультипликатор брони (то же что StalkerCore)
-            double armorMultiplier = calcArmorMultiplier(event.getVictim(), event.getWeaponTitle());
-            double totalReduction = 1.0 - armorMultiplier;
+        if (pen > EPSILON) {
+            String mapKey = event.getVictim().getUniqueId() + "::" + event.getWeaponTitle();
 
-            if (totalReduction > EPSILON) {
-                // baseDamage уже уменьшен StalkerCore: reducedBase = originalBase * armorMultiplier
-                // Восстанавливаем часть срезанного урона:
+            // FIX #1: берём originalBase из карты StalkerCore — точный оригинал без деления.
+            // Если записи нет — у жертвы не было брони с пулестойкостью, пенетрация не нужна.
+            double[] data = SHARED_ORIGINAL_BASE_MAP.remove(mapKey);
+            INSERT_TIMESTAMPS.remove(mapKey);
+
+            if (data != null) {
+                double originalBase    = data[0];
+                double reductionFactor = data[1];
+                double armorMultiplier = 1.0 - reductionFactor;
+
+                // Восстанавливаем часть срезанного урона пропорционально пенетрации:
                 //   newMultiplier = armorMultiplier + (1 - armorMultiplier) * pen
-                double newMultiplier = armorMultiplier + totalReduction * pen;
-                double originalBase  = event.getBaseDamage() / armorMultiplier; // восстанавливаем оригинал
+                // pen=1.0 → броня полностью игнорируется
+                // pen=0.5 → половина срезанного урона возвращается
+                // pen=0.0 → поведение без пенетрации
+                double newMultiplier = armorMultiplier + reductionFactor * pen;
+
+                // FIX #2: сохраняем critChance — setBaseDamage() его сбрасывает в WM API
+                double savedCritChance = event.getCritChance();
                 event.setBaseDamage(originalBase * newMultiplier);
+                event.setCritChance(savedCritChance);
             }
         }
 
@@ -116,55 +179,5 @@ public class AmmoModifierListener implements Listener {
         if (ammoConfig == null) return null;
 
         return ammoConfig.getCurrentAmmo(weaponStack);
-    }
-
-    /**
-     * Считает мультипликативный множитель пулестойкости брони жертвы —
-     * ТОЧНО так же как WeaponDamageListener в StalkerCore.
-     * StalkerCore хранит resistance как абсолютные единицы (20, 100, 200...),
-     * НЕ как доли. Формула:
-     *   reductionFactor = resistance / (BASE_HP + resistance)
-     *   multiplier = 1 - reductionFactor = BASE_HP / (BASE_HP + resistance)
-     * Результат: 1.0 = нет брони, 0.333 = 66.7% снижения (resistance=200).
-     */
-    private double calcArmorMultiplier(LivingEntity victim, String weaponTitle) {
-        if (victim.getEquipment() == null) return 1.0;
-
-        // Читаем только нагрудник (слот 2) — так же как WeaponDamageListener
-        ItemStack[] armor = victim.getEquipment().getArmorContents();
-        ItemStack chestplate = armor[2];
-        if (chestplate == null || !chestplate.hasItemMeta()) return 1.0;
-
-        PersistentDataContainer pdc = chestplate.getItemMeta().getPersistentDataContainer();
-        String data = pdc.get(bulletResistanceKey, PersistentDataType.STRING);
-        if (data == null) return 1.0;
-
-        double resistance = parseResistance(data, weaponTitle);
-        if (resistance <= EPSILON) return 1.0;
-
-        // Та же формула что в WeaponDamageListener:
-        // reductionFactor = resistance / (BASE_HP + resistance)
-        // multiplier = 1 - reductionFactor = BASE_HP / (BASE_HP + resistance)
-        final double BASE_HP = 100.0;
-        return BASE_HP / (BASE_HP + resistance);
-    }
-
-    /**
-     * Парсит строку PDC вида "Base:0.05;AK-47:0.1;SVD:0.0".
-     * Конкретное оружие имеет приоритет над Base.
-     */
-    private double parseResistance(String data, String weaponTitle) {
-        double base = 0.0;
-        for (String part : data.split(";")) {
-            String[] kv = part.split(":", 2);
-            if (kv.length != 2) continue;
-            try {
-                double value = Double.parseDouble(kv[1].trim());
-                String key = kv[0].trim();
-                if (key.equals(weaponTitle)) return value;
-                if (key.equals("Base")) base = value;
-            } catch (NumberFormatException ignored) {}
-        }
-        return base;
     }
 }

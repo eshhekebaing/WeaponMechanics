@@ -37,7 +37,11 @@ paperPluginYaml {
         server("MythicMobs", required = false)
         server("Geyser-Spigot", required = false)
         server("Vivecraft-Spigot-Extension", required = false)
-        server("StalkerCore", required = false, load = PaperPluginYaml.Load.BEFORE)
+
+        // FIX: убран load = BEFORE — WeaponMechanics должен грузиться ДО StalkerCore,
+        // а не после. StalkerCore сам объявляет softdepend на WeaponMechanics.
+        // BEFORE здесь создавал цикл: WM ждал SC, SC ждал WM.
+        server("StalkerCore", required = false)
     }
 }
 
@@ -48,7 +52,6 @@ tasks.shadowJar {
 
     val libPackage = "me.deecaad.core.lib"
 
-    // the kotlin plugin adds kotlin-stdlib to the classpath, but we don't want it in the shadow jar
     exclude("org/jetbrains/kotlin/**")
 
     relocate("org.slf4j", "$libPackage.slf4j")
