@@ -84,6 +84,7 @@ public class WeaponMechanics extends MechanicsPlugin {
     private @Nullable ResourcePackListener resourcePackListener;
     private @Nullable ProjectileSpawner projectileSpawner;
     private @Nullable Database database;
+    private @Nullable WeaponMechanicsPAPIExpansion papiExpansion;
 
     private @NotNull Configuration ammoConfigurations = new FastConfiguration();
     private @NotNull Configuration projectileConfigurations = new FastConfiguration();
@@ -296,7 +297,9 @@ public class WeaponMechanics extends MechanicsPlugin {
         }
 
         if (pm.isPluginEnabled("PlaceholderAPI")) {
-            new WeaponMechanicsPAPIExpansion(this).register();
+            papiExpansion = new WeaponMechanicsPAPIExpansion(this);
+            papiExpansion.register();
+            papiExpansion.start();
             debugger.info("Hooked into PlaceholderAPI");
         }
 
@@ -500,6 +503,10 @@ public class WeaponMechanics extends MechanicsPlugin {
             }
         }
 
+        if (papiExpansion != null) {
+            papiExpansion.stop();
+            papiExpansion = null;
+        }
         database = null;
         weaponHandler = null;
         entityWrappers.clear();

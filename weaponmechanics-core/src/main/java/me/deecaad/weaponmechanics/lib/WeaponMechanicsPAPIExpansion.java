@@ -140,21 +140,12 @@ public class WeaponMechanicsPAPIExpansion extends PlaceholderExpansion {
         PlayerCache pc = cache.get(player.getUniqueId());
         if (pc == null) return ""; // игрок ещё не попал в кэш (первый тик)
 
-        switch (params) {
-            case "is_weapon":
-                return pc.weaponTitle != null ? "true" : "false";
-
-            case "weapon_title":
-                return pc.weaponTitle != null ? pc.weaponTitle : "";
-
-            case "ammo_left":
-                return pc.weaponTitle != null ? String.valueOf(pc.ammoLeft) : "";
-
-            case "ammo_available":
-                return pc.weaponTitle != null ? String.valueOf(pc.ammoAvailable) : "";
-
-            default:
-                return null;
-        }
+        return switch (params) {
+            case "is_weapon" -> pc.weaponTitle != null ? "true" : "false";
+            case "weapon_title" -> pc.weaponTitle != null ? pc.weaponTitle : "";
+            case "ammo_left" -> pc.weaponTitle != null ? String.valueOf(pc.ammoLeft) : "";
+            case "ammo_available" -> pc.weaponTitle != null ? String.valueOf(pc.ammoAvailable) : "";
+            default -> null;
+        };
     }
 }
