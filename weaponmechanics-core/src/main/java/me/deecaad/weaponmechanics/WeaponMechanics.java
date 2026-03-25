@@ -25,6 +25,7 @@ import me.deecaad.core.mechanics.defaultmechanics.Mechanic;
 import me.deecaad.core.mechanics.targeters.Targeter;
 import me.deecaad.core.utils.FileUtil;
 import me.deecaad.weaponmechanics.lib.MythicMobsLoader;
+import me.deecaad.weaponmechanics.lib.WeaponMechanicsPAPIExpansion;
 import me.deecaad.weaponmechanics.listeners.ExplosionInteractionListeners;
 import me.deecaad.weaponmechanics.listeners.AmmoModifierListener;
 import me.deecaad.weaponmechanics.listeners.ResourcePackListener;
@@ -292,6 +293,11 @@ public class WeaponMechanics extends MechanicsPlugin {
                 pm.registerEvents(new MythicMobsLoader(), this);
                 debugger.info("Hooked in MythicMobs " + desc.getVersion());
             }
+        }
+
+        if (pm.isPluginEnabled("PlaceholderAPI")) {
+            new WeaponMechanicsPAPIExpansion(this).register();
+            debugger.info("Hooked into PlaceholderAPI");
         }
 
         return super.handleListeners();
