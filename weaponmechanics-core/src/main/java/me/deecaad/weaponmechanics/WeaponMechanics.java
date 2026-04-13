@@ -71,6 +71,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.jar.JarFile;
@@ -287,7 +288,7 @@ public class WeaponMechanics extends MechanicsPlugin {
         }
 
         if (pm.isPluginEnabled("MythicMobs")) {
-            PluginDescriptionFile desc = pm.getPlugin("MythicMobs").getDescription();
+            PluginDescriptionFile desc = Objects.requireNonNull(pm.getPlugin("MythicMobs")).getDescription();
             if (!desc.getVersion().split("\\.")[0].contains("5")) {
                 debugger.warning("Could not hook into MythicMobs because it is outdated");
             } else {
@@ -299,7 +300,6 @@ public class WeaponMechanics extends MechanicsPlugin {
         if (pm.isPluginEnabled("PlaceholderAPI")) {
             papiExpansion = new WeaponMechanicsPAPIExpansion(this);
             papiExpansion.register();
-            papiExpansion.start();
             debugger.info("Hooked into PlaceholderAPI");
         }
 
@@ -504,7 +504,6 @@ public class WeaponMechanics extends MechanicsPlugin {
         }
 
         if (papiExpansion != null) {
-            papiExpansion.stop();
             papiExpansion = null;
         }
         database = null;
