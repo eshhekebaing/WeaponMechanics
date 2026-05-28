@@ -93,7 +93,7 @@ public class ShootLocationChooser implements Serializer<ShootLocationChooser> {
         }
 
         // Scoping
-        Quaterniond localRotation = new EntityTransform(shooter).getLocalRotation();
+        Quaterniond localRotation = Transform.fromYawPitch(shooter.getYaw(), shooter.getPitch());
         if (wrapper.getHandData(isMainHand).getZoomData().isZooming() && scope != null) {
             scope.offset(isRightHand, source, localRotation);
             return source;
