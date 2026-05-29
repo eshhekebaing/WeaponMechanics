@@ -194,13 +194,14 @@ public class Explosion implements Serializer<Explosion> {
             }
         }, currentDetonation.getDelay());
 
-        CastData impactCast = new CastData(cause, projectile.getWeaponTitle(), projectile.getWeaponStack());
-        if (origin != null)
-            impactCast.setTargetLocation(origin);
-        else
-            impactCast.setTargetLocation(projectile.getBukkitLocation());
-
-        currentDetonation.getImpactMechanics().use(impactCast);
+        MechanicManager impactMechanics = currentDetonation.getImpactMechanics();
+        if (impactMechanics != null) {
+            CastData impactCast = new CastData(cause, projectile.getWeaponTitle(), projectile.getWeaponStack());
+            if (origin != null)
+                impactCast.setTargetLocation(origin);
+            else
+                impactCast.setTargetLocation(projectile::getBukkitLocation);
+        }
     }
 
     public void explode(LivingEntity cause, Location origin, WeaponProjectile projectile) {
