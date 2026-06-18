@@ -2,7 +2,7 @@ import xyz.jpenilla.resourcefactory.paper.PaperPluginYaml
 
 plugins {
     `java-library`
-    id("com.gradleup.shadow") version "8.3.5"
+    id("com.gradleup.shadow") version "9.4.1"
     id("xyz.jpenilla.resource-factory-paper-convention") version "1.3.1"
 }
 
@@ -15,6 +15,9 @@ dependencies {
         implementation(project(":${it.name}"))
     }
 }
+
+java { toolchain { languageVersion.set(JavaLanguageVersion.of(25)) } }
+tasks.withType<JavaCompile>().configureEach { options.release.set(25) }
 
 paperPluginYaml {
     val versionProperty = findProperty("version") as? String
@@ -34,7 +37,7 @@ paperPluginYaml {
         server("WorldEdit", required = false)
         server("WorldGuard", required = false)
         server("PlaceholderAPI", required = false)
-        server("MythicMobs", required = false)
+        server("MythicMobs", required = false, load = PaperPluginYaml.Load.BEFORE)
         server("Geyser-Spigot", required = false)
         server("Vivecraft-Spigot-Extension", required = false)
 

@@ -1,0 +1,97 @@
+Sky_Torch:
+  Info:
+    Weapon_Item:
+      Type: "BEACON"
+      Name: "<aqua>Sky Torch"
+      Lore:
+        - "<gray>Throw to mark a target. An orbital laser"
+        - "<gray>strike will follow after a 2-second charge."
+        - ""
+        - "<gray>Weapon Statistics"
+        - "<gold>➣<gray> 12 <gold>⟸ <gray>Blast radius"
+        - "<gold>➣<gray> 40 <gold>⟸ <gray>Direct damage"
+        - "<gold>➣<gray> 2.25 sec <gold>⟸ <gray>Charge-up"
+      Unbreakable: true
+      Hide_Flags: true
+      Deny_Use_In_Crafting: true
+    Weapon_Get_Mechanics:
+      - "Sound{sound=item.armor.equip_chain, pitch=0.75}"
+    Cancel:
+      Block_Interactions: true
+      Item_Interactions: true
+
+  Projectile:
+    Projectile_Settings:
+      Type: "DROPPED_ITEM"
+      Projectile_Item_Or_Block:
+        Type: "REDSTONE_TORCH"
+      Disable_Entity_Collisions: true
+    Bouncy:
+      Maximum_Bounce_Amount: 3
+      Blocks:
+        Allow_Any: true
+        Default_Speed_Multiplier: 0.4
+      Rolling:
+        Required_Motion_To_Start_Rolling: 6
+        Blocks:
+          Allow_Any: true
+          Default_Speed_Multiplier: 0.8
+    Mechanics:
+      - "Sound{sound=entity.firework_rocket.launch, volume=2, pitch=1.8}"
+
+  Shoot:
+    Trigger:
+      Main_Hand: "RIGHT_CLICK"
+      Off_Hand: "RIGHT_CLICK"
+      Circumstance:
+        Swimming: "DENY"
+    Projectile_Speed: 32
+    Delay_Between_Shots: 100
+    Consume_Item_On_Shoot: true
+    Mechanics:
+      - "Sound{sound=entity.egg.throw, volume=0.5, noise=0.1}"
+
+  Damage:
+    Base_Explosion_Damage: 40
+    Fire_Ticks: 80
+    Armor_Damage: 6
+
+  Explosion:
+    Explosion_Exposure: "VOID"
+    Explosion_Shape: "DEFAULT"
+    Explosion_Type_Data:
+      Yield: 12
+    Detonation:
+      Delay_After_Impact: 42
+      Remove_Projectile_On_Detonation: true
+      Impact_When:
+        Block: true
+      Impact_Mechanics:
+        - "Sound{sound=block.respawn_anchor.charge, volume=4} @Target{}"
+        - "Sound{sound=entity.warden.sonic_charge, volume=4, pitch=0.8, delayBeforePlay=20} @Target{}"
+        - "Sound{sound=block.conduit.ambient, volume=4, delayBeforePlay=20} @Target{}"
+        # TODO: Uncomment when you purchase WeaponMechanicsCosmetics: https://pluginify.org/resources/13/
+        #- "Skybeam{delayBeforePlay=40} @Target{}"
+    Block_Damage:
+      Spawn_Falling_Block_Chance: 0.3
+      Default_Mode: BREAK
+      Blocks:
+        - "BEDROCK cancel"
+        - "$WATER cancel"
+        - "OBSIDIAN cancel"
+        - "$LAVA cancel"
+    Regeneration:
+      Ticks_Before_Start: 600
+      Max_Blocks_Per_Update: 5
+      Ticks_Between_Updates: 5
+    Mechanics:
+      # TODO: Uncomment when you purchase WeaponMechanicsCosmetics: https://pluginify.org/resources/13/
+      #- "Shockwave{} @Target{}"
+      #- "Blinding{color=#EEBBBB, delayBeforePlay=3} @World{} ?Range{max=10}"
+      #- "Explosioncloud{delayBeforePlay=3} @Target{}"
+      #- "Camerashake{delayBeforePlay=3} @World{} ?Range{max=60}"
+
+      - "Potion{potion=NIGHT_VISION, time=30, particles=hide, hideIcon=true} @World{} ?Range{max=60}"
+      - "Sound{sound=entity.warden.sonic_boom, volume=6, delayBeforePlay=3} @Target{}"
+      - "Sound{sound=entity.warden.sonic_boom, volume=6, pitch=2, delayBeforePlay=3} @Target{}"
+      - "Sound{sound=item.totem.use, volume=6, pitch=0.5, delayBeforePlay=3} @Target{}"
