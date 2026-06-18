@@ -32,7 +32,11 @@ import me.deecaad.weaponmechanics.listeners.ResourcePackListener;
 import me.deecaad.weaponmechanics.listeners.WeaponListeners;
 import me.deecaad.weaponmechanics.listeners.trigger.TriggerEntityListeners;
 import me.deecaad.weaponmechanics.listeners.trigger.TriggerPlayerListeners;
-import me.deecaad.weaponmechanics.packetlisteners.*;
+import me.deecaad.weaponmechanics.packetlisteners.OutAbilitiesListener;
+import me.deecaad.weaponmechanics.packetlisteners.OutEntityEffectListener;
+import me.deecaad.weaponmechanics.packetlisteners.OutRemoveEntityEffectListener;
+import me.deecaad.weaponmechanics.packetlisteners.OutSetSlotBobFix;
+import me.deecaad.weaponmechanics.utils.CustomTag;
 import me.deecaad.weaponmechanics.weapon.WeaponHandler;
 import me.deecaad.weaponmechanics.weapon.WeaponSerializer;
 import me.deecaad.weaponmechanics.weapon.damage.BlockDamageData;
@@ -55,6 +59,8 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.HandlerList;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.PluginDescriptionFile;
@@ -464,8 +470,71 @@ public class WeaponMechanics extends MechanicsPlugin {
                         PlayerWrapper playerWrapper = getPlayerWrapper(player);
                         weaponHandler.getStatsHandler().load(playerWrapper);
                     }
+
+                    // Update weapon items in all online players' inventories
+                    // so changes in config (lore, name, model data, etc.) take effect immediately
+                    updateWeaponsInInventories();
+
                     return CompletableFuture.completedFuture(null);
                 });
+    }
+
+    /**
+     * After /wm reload, iterates over all online players' inventories and replaces
+     * each WeaponMechanics weapon item with a freshly generated one (updated lore,
+     * name, model data, etc. from the new config), while preserving per-item NBT state:
+     * <ul>
+     *   <li>{@link CustomTag#AMMO_LEFT}       – bullets currently in the magazine</li>
+     *   <li>{@link CustomTag#AMMO_TYPE_INDEX} – which ammo type is loaded</li>
+     *   <li>{@link CustomTag#SELECTIVE_FIRE}  – burst / auto / single-fire mode</li>
+     *   <li>{@link CustomTag#FIREARM_ACTION_STATE} – open/closed bolt state</li>
+     *   <li>{@link CustomTag#WEAPON_SKIN}     – cosmetic skin override</li>
+     * </ul>
+     * Slots that do not contain a WM weapon are left untouched.
+     */
+    private void updateWeaponsInInventories() {
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            PlayerInventory inv = player.getInventory();
+            boolean changed = false;
+
+            // Iterate all 41 slots (0-35 main inventory + 36-39 armor + 40 off-hand)
+            for (int i = 0; i < inv.getSize(); i++) {
+                ItemStack old = inv.getItem(i);
+                if (old == null) continue;
+
+                String weaponTitle = WeaponMechanicsAPI.getWeaponTitle(old);
+                if (weaponTitle == null) continue;
+
+                // Check that the weapon still exists after reload (could have been removed from config)
+                if (!getWeaponHandler().getInfoHandler().hasWeapon(weaponTitle)) continue;
+
+                // ----- Save NBT state from the old item -----
+                int ammoLeft         = CustomTag.AMMO_LEFT.hasInteger(old)             ? CustomTag.AMMO_LEFT.getInteger(old)             : -1;
+                int ammoTypeIndex    = CustomTag.AMMO_TYPE_INDEX.hasInteger(old)       ? CustomTag.AMMO_TYPE_INDEX.getInteger(old)       : -1;
+                int selectiveFire    = CustomTag.SELECTIVE_FIRE.hasInteger(old)        ? CustomTag.SELECTIVE_FIRE.getInteger(old)        : -1;
+                int firearmState     = CustomTag.FIREARM_ACTION_STATE.hasInteger(old)  ? CustomTag.FIREARM_ACTION_STATE.getInteger(old)  : -1;
+                String weaponSkin    = CustomTag.WEAPON_SKIN.hasString(old)            ? CustomTag.WEAPON_SKIN.getString(old)            : null;
+
+                // ----- Generate fresh item (picks up all config changes) -----
+                ItemStack updated = WeaponMechanicsAPI.generateWeapon(weaponTitle);
+                updated.setAmount(old.getAmount());
+
+                // ----- Restore NBT state onto new item -----
+                if (ammoLeft      >= 0) CustomTag.AMMO_LEFT.setInteger(updated, ammoLeft);
+                if (ammoTypeIndex >= 0) CustomTag.AMMO_TYPE_INDEX.setInteger(updated, ammoTypeIndex);
+                if (selectiveFire >= 0) CustomTag.SELECTIVE_FIRE.setInteger(updated, selectiveFire);
+                if (firearmState  >= 0) CustomTag.FIREARM_ACTION_STATE.setInteger(updated, firearmState);
+                if (weaponSkin    != null) CustomTag.WEAPON_SKIN.setString(updated, weaponSkin);
+
+                inv.setItem(i, updated);
+                changed = true;
+            }
+
+            if (changed) {
+                player.updateInventory();
+            }
+        }
+        debugger.info("Updated weapon items in online players' inventories after reload");
     }
 
     @Override
